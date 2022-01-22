@@ -141,12 +141,15 @@ AppProcess::AppProcess(AppConfig &app_cfg, environment_t &orig)
         cwd_path_str.c_str(),
         &startup_info, &process_info);
     
-    m_is_running = rv;
-
-    if (rv) {
-        ResumeThread(process_info.hThread);
-        CloseHandle(process_info.hThread);
+    if (!rv) {
+        throw std::runtime_error(fmt::format("Failed to start application ({})", app_cfg.exec_path));
     }
+    
+    m_is_running = true;
+
+    ResumeThread(process_info.hThread);
+    CloseHandle(process_info.hThread);
+    m_handle_process = process_info.hProcess;
 
     CloseHandle(startup_info.hStdInput);
     CloseHandle(startup_info.hStdOutput);
@@ -204,6 +207,10 @@ AppProcess::~AppProcess() {
     m_is_running = false;
     // TODO: cleanup the thread somehow
     m_thread->detach();
+}
+
+void AppProcess::Terminate() {
+    TerminateProcess(m_handle_process, 0);
 }
 
 }

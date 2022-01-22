@@ -74,6 +74,7 @@ private:
     std::unique_ptr<std::thread> m_thread;
     HANDLE m_handle_read_std_out = NULL;
     HANDLE m_handle_read_std_err = NULL;
+    HANDLE m_handle_process = NULL;
 
     std::string m_label;
 
@@ -85,6 +86,7 @@ public:
     inline bool GetIsRunning() const { return m_is_running; }
     void ListenForChanges(); // listen for changes to the process's status
     ScrollingBuffer& GetBuffer() { return m_buffer; }
+    void Terminate();
 private:
     void ListenerThread();
 };

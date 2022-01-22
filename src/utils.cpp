@@ -183,4 +183,16 @@ Exit:
     return ringBuffer;
 }
 
+// copy and paste a buffer to the clipboard
+// https://stackoverflow.com/questions/1264137/how-to-copy-string-to-clipboard-in-c
+void CopyToClipboard(const char *buffer, size_t length) {
+    HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, length);
+    memcpy(GlobalLock(hMem), buffer, length);
+    GlobalUnlock(hMem);
+    OpenClipboard(0);
+    EmptyClipboard();
+    SetClipboardData(CF_TEXT, hMem);
+    CloseClipboard();
+}
+
 }

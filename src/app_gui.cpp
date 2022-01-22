@@ -212,6 +212,17 @@ void RenderProcessesTab(App &main_app) {
             if (ImGui::Selectable(proc->GetName().c_str(), is_selected, ImGuiSelectableFlags_SpanAllColumns)) {
                 selected_pid = pid;
             }
+
+            // options while process is running
+            if (proc->GetIsRunning()) {
+                if (ImGui::BeginPopupContextItem()) {
+                    if (ImGui::MenuItem("Terminate")) {
+                        proc->Terminate();
+                    }
+                    ImGui::EndPopup();
+                }
+            }
+
             ImGui::PopItemWidth();
             ImGui::PopID();
 
@@ -233,8 +244,16 @@ void RenderProcessesTab(App &main_app) {
         auto &proc = processes[selected_pid];
         auto &scroll_buffer = proc->GetBuffer();
         char *buffer_begin = scroll_buffer.GetReadBuffer();
-        char *buffer_end = buffer_begin + scroll_buffer.GetReadSize();
+        size_t buffer_length = scroll_buffer.GetReadSize();
+        char *buffer_end = buffer_begin + buffer_length;
         ImGui::TextUnformatted(buffer_begin, buffer_end);
+        // copy process text to clipboard
+        if (ImGui::BeginPopupContextItem("##buffer_text_context_menu")) {
+            if (ImGui::MenuItem("Copy")) {
+                utility::CopyToClipboard(buffer_begin, buffer_length);
+            }
+            ImGui::EndPopup();
+        }
 
     }
     ImGui::EndChild();
