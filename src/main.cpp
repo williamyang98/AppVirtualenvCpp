@@ -50,10 +50,11 @@ namespace fs = std::filesystem;
 int run(const char *root_path);
 
 
+// This breaks the process piping if we do not link as console application
 // tell compiler to not link as /SUBSYSTEM:console which adds an extra command prompt
-#if NDEBUG
-#pragma comment(linker, "/SUBSYSTEM:windows /ENTRY:mainCRTStartup")
-#endif
+// #if NDEBUG
+// #pragma comment(linker, "/SUBSYSTEM:windows /ENTRY:mainCRTStartup")
+// #endif
 
 int main(int argc, char **argv) {
     auto logger = spdlog::basic_logger_mt("root", "logs.txt");

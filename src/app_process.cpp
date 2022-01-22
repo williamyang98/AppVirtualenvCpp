@@ -210,7 +210,9 @@ AppProcess::~AppProcess() {
 }
 
 void AppProcess::Terminate() {
-    TerminateProcess(m_handle_process, 0);
+    if (TerminateProcess(m_handle_process, 0)) {
+        m_is_running = false;
+    }
 }
 
 }
