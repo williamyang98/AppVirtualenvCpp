@@ -9,6 +9,7 @@
 #include "app_schema.h"
 #include "environ.h"
 #include "file_loading.h"
+#include "utils.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -26,33 +27,39 @@ void warn_and_throw(T x) {
     throw std::runtime_error(x);
 }
 
-ScrollingBuffer::ScrollingBuffer(int max_size) 
-: m_max_size(max_size)
+ScrollingBuffer::ScrollingBuffer() 
 {
-    m_buffer = new char[max_size+1];
-    m_buffer[max_size] = '\0';
     m_curr_size = 0;
     m_curr_write_index = 0;
+    m_curr_read_index = 0;
+    m_ring_buffer = (char *)(utility::CreateRingBuffer(m_max_size, (void **)(&m_ring_buffer_mirror)));
+
+    if (m_ring_buffer == NULL) {
+        throw std::runtime_error("Failed to allocate circular buffer pages for scrolling buffer");
+    }
 }
 
 ScrollingBuffer::~ScrollingBuffer() {
-    delete[] m_buffer;
+    // virtualalloc2 circular buffer page: https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualalloc2
+    // unmapviewoffile page: https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-unmapviewoffile
+    // unmap the ring buffers
+    UnmapViewOfFile(m_ring_buffer);
+    UnmapViewOfFile(m_ring_buffer_mirror);
 }
 
-void ScrollingBuffer::WriteBytes(const char *rd_buf, const int size) {
-    auto &j = m_curr_write_index;
-    for (int i = 0; i < size; i++) {
-        m_buffer[j] = rd_buf[i];
-        j = (j+1) % m_max_size;
-    }
+void ScrollingBuffer::IncrementIndex(const size_t size) {
+    m_curr_write_index = (m_curr_write_index + size) % m_max_size;
     m_curr_size += size;
+
+    // overhang detection
     if (m_curr_size > m_max_size) {
         m_curr_size = m_max_size;
+        m_curr_read_index = m_curr_write_index;
     }
+
 }
 
 AppProcess::AppProcess(AppConfig &app_cfg, environment_t &orig)
-: m_buffer(10000)
 {
     // create params to generate our environment data structure
     EnvParams params;
@@ -152,9 +159,6 @@ AppProcess::AppProcess(AppConfig &app_cfg, environment_t &orig)
 }
 
 void AppProcess::ListenerThread() {
-    DWORD dwRead; 
-    constexpr int BUFSIZE = 128;
-    CHAR chBuf[BUFSIZE]; 
     BOOL bSuccess = FALSE;
 
     auto get_pipe_count = [](HANDLE pipe) -> DWORD {
@@ -164,19 +168,15 @@ void AppProcess::ListenerThread() {
     };
 
     // return true if the pipe is broken
-    auto read_from_pipe = [this, &chBuf, &BUFSIZE, &dwRead](HANDLE pipe) {
-        bool is_success = ReadFile(pipe, chBuf, BUFSIZE, &dwRead, NULL);
+    auto read_from_pipe = [this] (HANDLE pipe) {
+        DWORD dwRead = 0;
+        bool is_success = ReadFile(pipe, m_buffer.GetWriteBuffer(), m_buffer.GetMaxSize(), &dwRead, NULL);
         if((!is_success) || (dwRead == 0)) {
             return true;
         }
 
-        // thread safe write to buffer
-        // TODO: implement a scrolling fixed sized buffer
-        // learn how to use virtualmemory functions to create a memory mapped circular buffer
-        {
-            auto lock = std::scoped_lock(m_buffer_mutex);
-            m_buffer.WriteBytes(chBuf, dwRead);
-        }
+        // update the circular buffer to point in the right location
+        m_buffer.IncrementIndex(dwRead);
 
         return false;
     };
@@ -192,7 +192,7 @@ void AppProcess::ListenerThread() {
         while ((total_pending = get_pipe_count(m_handle_read_std_err)) && !is_pipe_broken) {
             is_pipe_broken = is_pipe_broken || read_from_pipe(m_handle_read_std_err); 
         }
-        Sleep(33);
+        Sleep(16);
         if (is_pipe_broken) {
             break;
         }

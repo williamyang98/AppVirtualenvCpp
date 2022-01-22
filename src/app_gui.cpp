@@ -231,10 +231,9 @@ void RenderProcessesTab(App &main_app) {
         ImGui::Text("Select a process to view buffer");
     } else {
         auto &proc = processes[selected_pid];
-        auto lock = std::scoped_lock(proc->GetBufferMutex());
         auto &scroll_buffer = proc->GetBuffer();
-        char *buffer_begin = scroll_buffer.GetBuffer();
-        char *buffer_end = buffer_begin + scroll_buffer.GetSize();
+        char *buffer_begin = scroll_buffer.GetReadBuffer();
+        char *buffer_end = buffer_begin + scroll_buffer.GetReadSize();
         ImGui::TextUnformatted(buffer_begin, buffer_end);
 
     }

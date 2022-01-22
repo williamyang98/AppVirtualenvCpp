@@ -51,17 +51,20 @@ private:
 class ScrollingBuffer 
 {
 private:
-    char *m_buffer;
-    const int m_max_size;
-    int m_curr_size;
-    int m_curr_write_index;
+    char *m_ring_buffer;
+    char *m_ring_buffer_mirror;
+    const unsigned int m_max_size = 0x10000;
+    std::atomic<size_t> m_curr_size;
+    size_t m_curr_write_index;
+    std::atomic<size_t> m_curr_read_index;
 public:
-    ScrollingBuffer(int max_size);
+    ScrollingBuffer();
     ~ScrollingBuffer();
-    inline char *GetBuffer() { return m_buffer; }
-    inline int GetSize() { return m_curr_size; }
-    inline int GetMaxSize() { return m_max_size; }
-    void WriteBytes(const char *rd_buf, const int size);
+    inline char *GetReadBuffer()  { return &m_ring_buffer[m_curr_read_index]; }
+    inline char *GetWriteBuffer() { return &m_ring_buffer[m_curr_write_index]; }
+    inline size_t GetReadSize() { return m_curr_size; }
+    inline size_t GetMaxSize() { return m_max_size; }
+    void IncrementIndex(const size_t size);
 };
 
 class AppProcess 
@@ -75,14 +78,12 @@ private:
     std::string m_label;
 
     ScrollingBuffer m_buffer;
-    std::mutex m_buffer_mutex;
 public:
     AppProcess(AppConfig &app_cfg, environment_t &orig);
     ~AppProcess();
     inline const std::string &GetName() const { return m_label; }
     inline bool GetIsRunning() const { return m_is_running; }
     void ListenForChanges(); // listen for changes to the process's status
-    std::mutex &GetBufferMutex() { return m_buffer_mutex; }
     ScrollingBuffer& GetBuffer() { return m_buffer; }
 private:
     void ListenerThread();
