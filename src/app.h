@@ -69,10 +69,8 @@ class AppProcess
 private:
     std::atomic<bool> m_is_running;
     std::unique_ptr<std::thread> m_thread;
-    HANDLE m_handle_std_in_rd = NULL;
-    HANDLE m_handle_std_in_wr = NULL;
-    HANDLE m_handle_std_out_rd = NULL;
-    HANDLE m_handle_std_out_wr = NULL;
+    HANDLE m_handle_read_std_out = NULL;
+    HANDLE m_handle_read_std_err = NULL;
 
     std::string m_label;
 

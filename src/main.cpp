@@ -114,7 +114,7 @@ int run(const char *root_path) {
     glfwWindowHint(GLFW_FOCUSED, GLFW_TRUE);
 
     // Create window with graphics context
-    GLFWwindow* window = glfwCreateWindow(1280, 720, "TorrentRenamer", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(1280, 720, "Application Virtual Environment", NULL, NULL);
     if (window == NULL)
         return 1;
     glfwMakeContextCurrent(window);

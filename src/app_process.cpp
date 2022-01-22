@@ -88,41 +88,39 @@ AppProcess::AppProcess(AppConfig &app_cfg, environment_t &orig)
     m_label = app_cfg.name;
 
     // Set the bInheritHandle flag so pipe handles are inherited. 
-    SECURITY_ATTRIBUTES security_attr; 
-    security_attr.nLength = sizeof(SECURITY_ATTRIBUTES); 
+    SECURITY_ATTRIBUTES security_attr = {sizeof(security_attr)};
     security_attr.bInheritHandle = TRUE; 
-    security_attr.lpSecurityDescriptor = NULL; 
+
+    // setup win32 process parameters
+    PROCESS_INFORMATION process_info = {0};
+
+    STARTUPINFO startup_info = {sizeof(startup_info)};
+    startup_info.dwFlags = STARTF_USESTDHANDLES;
 
     // TODO: free pipes if we fail somewhere along this?
-    if (!CreatePipe(&m_handle_std_out_rd, &m_handle_std_out_wr, &security_attr, 0)) {
-        warn_and_throw("Failed to create child std_out_rd, std_out_wr");
+    if (!CreatePipe(&startup_info.hStdInput, &startup_info.hStdInput, &security_attr, 0)) {
+        warn_and_throw("Failed to create child pipe on stdin");
     }
         
-    if (!CreatePipe(&m_handle_std_in_rd, &m_handle_std_in_wr, &security_attr, 0)) {
-        warn_and_throw("Failed to create child std_in_rd, std_in_wr");
+    if (!CreatePipe(&m_handle_read_std_out, &startup_info.hStdOutput, &security_attr, 0)) {
+        warn_and_throw("Failed to create child pipe on stdout");
     }
 
-    if (!SetHandleInformation(m_handle_std_out_rd, HANDLE_FLAG_INHERIT, 0)) {
+    if (!CreatePipe(&m_handle_read_std_err, &startup_info.hStdError, &security_attr, 0)) {
+        warn_and_throw("Failed to create child pipe on stderr");
+    }
+
+    if (!SetHandleInformation(m_handle_read_std_err, HANDLE_FLAG_INHERIT, 0)) {
+        warn_and_throw("Failed to set handle information on std_err_rd");
+    }
+
+    if (!SetHandleInformation(m_handle_read_std_out, HANDLE_FLAG_INHERIT, 0)) {
         warn_and_throw("Failed to set handle information on std_out_rd");
     }
 
-    if (!SetHandleInformation(m_handle_std_in_wr, HANDLE_FLAG_INHERIT, 0)) {
-        warn_and_throw("Failed to set handle information on std_in_rd");
-    }
 
-    // setup win32 process parameters
-    PROCESS_INFORMATION process_info;
-
-    STARTUPINFO startup_info;
-    SecureZeroMemory(&startup_info, sizeof(STARTUPINFO));
-    startup_info.cb = sizeof(STARTUPINFO);
-    startup_info.hStdError = m_handle_std_out_wr;
-    startup_info.hStdOutput = m_handle_std_out_wr;
-    startup_info.hStdInput = m_handle_std_in_rd;
-    startup_info.dwFlags |= STARTF_USESTDHANDLES;
-
-    bool is_inherit_handles = true;
-    DWORD dw_flags = 0;
+    bool is_inherit_handles = TRUE;
+    DWORD dw_flags = CREATE_SUSPENDED;
 
     auto args_str = fmt::format("\"{}\" {}", app_cfg.exec_path, app_cfg.args);
 
@@ -138,6 +136,15 @@ AppProcess::AppProcess(AppConfig &app_cfg, environment_t &orig)
     
     m_is_running = rv;
 
+    if (rv) {
+        ResumeThread(process_info.hThread);
+        CloseHandle(process_info.hThread);
+    }
+
+    CloseHandle(startup_info.hStdInput);
+    CloseHandle(startup_info.hStdOutput);
+    CloseHandle(startup_info.hStdError);
+
     // startup the listener thread    
     m_thread = std::make_unique<std::thread>([this]() {
         ListenerThread();
@@ -149,24 +156,45 @@ void AppProcess::ListenerThread() {
     constexpr int BUFSIZE = 128;
     CHAR chBuf[BUFSIZE]; 
     BOOL bSuccess = FALSE;
-    HANDLE hParentStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
 
-    while (m_is_running) 
-    { 
-        bSuccess = ReadFile(m_handle_std_out_rd, chBuf, BUFSIZE, &dwRead, NULL);
-        if((!bSuccess) || (dwRead == 0)) {
-            break; 
+    auto get_pipe_count = [](HANDLE pipe) -> DWORD {
+        DWORD result;
+        PeekNamedPipe(pipe, 0, 0, 0, &result, 0);
+        return result;
+    };
+
+    // return true if the pipe is broken
+    auto read_from_pipe = [this, &chBuf, &BUFSIZE, &dwRead](HANDLE pipe) {
+        bool is_success = ReadFile(pipe, chBuf, BUFSIZE, &dwRead, NULL);
+        if((!is_success) || (dwRead == 0)) {
+            return true;
         }
 
         // thread safe write to buffer
         // TODO: implement a scrolling fixed sized buffer
+        // learn how to use virtualmemory functions to create a memory mapped circular buffer
         {
             auto lock = std::scoped_lock(m_buffer_mutex);
             m_buffer.WriteBytes(chBuf, dwRead);
         }
 
-        if (!bSuccess) {
-            break; 
+        return false;
+    };
+
+    bool is_pipe_broken = false;
+    DWORD total_pending;
+
+    while (m_is_running) 
+    { 
+        while ((total_pending = get_pipe_count(m_handle_read_std_out)) && !is_pipe_broken) {
+            is_pipe_broken = is_pipe_broken || read_from_pipe(m_handle_read_std_out); 
+        }
+        while ((total_pending = get_pipe_count(m_handle_read_std_err)) && !is_pipe_broken) {
+            is_pipe_broken = is_pipe_broken || read_from_pipe(m_handle_read_std_err); 
+        }
+        Sleep(33);
+        if (is_pipe_broken) {
+            break;
         }
     } 
     m_is_running = false;

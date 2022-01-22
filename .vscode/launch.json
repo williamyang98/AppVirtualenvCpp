@@ -35,7 +35,7 @@
             "request": "launch",
             // Resolved by CMake Tools:
             "program": "${workspaceFolder}/build/Debug/main.exe",
-            "args": ["./tests/"],
+            "args": ["./res/apps.json"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "externalConsole": true,
