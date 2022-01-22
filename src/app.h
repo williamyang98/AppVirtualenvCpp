@@ -79,7 +79,7 @@ private:
     ScrollingBuffer m_buffer;
     std::mutex m_buffer_mutex;
 public:
-    AppProcess(AppConfig &app_cfg, EnvConfig &env_cfg, environment_t &orig);
+    AppProcess(AppConfig &app_cfg, environment_t &orig);
     ~AppProcess();
     inline const std::string &GetName() const { return m_label; }
     inline bool GetIsRunning() const { return m_is_running; }
@@ -101,7 +101,6 @@ public:
     std::list<std::string> m_runtime_warnings;
     std::vector<std::unique_ptr<AppProcess>> m_processes;
 private:
-    EnvConfig m_default_env_config;
     environment_t m_parent_env;
     // for handling the list view of configs when we add/remove items
     config_list_t m_configs;

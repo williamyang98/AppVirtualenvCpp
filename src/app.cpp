@@ -77,21 +77,6 @@ App::App() {
     m_is_config_list_dirtied = false;
     m_parent_env = get_env();
 
-    // load default environment config
-    auto env_doc_res = load_document_from_filename(DEFAULT_ENV_FILEPATH);
-    if (!env_doc_res) {
-        m_runtime_errors.push_back(fmt::format("Failed to retrieve default environment file ({})", DEFAULT_ENV_FILEPATH));
-        return;
-    }
-
-    auto env_doc = std::move(env_doc_res.value());
-    if (!validate_document(env_doc, ENV_SCHEMA)) {
-        m_runtime_errors.push_back(std::string("Failed to validate default environment schema"));
-        return;
-    }
-
-    m_default_env_config = load_env_config(env_doc);
-
     // load default app config
     auto app_doc_res = load_document_from_filename(DEFAULT_APP_FILEPATH);
     if (!app_doc_res) {
@@ -144,8 +129,12 @@ bool App::open_app_config(const std::string &app_filepath) {
 }
 
 void App::launch_app(AppConfig &app) {
-    auto process_ptr = std::make_unique<AppProcess>(app, m_default_env_config, m_parent_env);
-    m_processes.push_back(std::move(process_ptr));
+    try {
+        auto process_ptr = std::make_unique<AppProcess>(app, m_parent_env);
+        m_processes.push_back(std::move(process_ptr));
+    } catch (std::exception &ex) {
+        m_runtime_warnings.push_back(ex.what());
+    }
 }
 
 void App::save_configs() {

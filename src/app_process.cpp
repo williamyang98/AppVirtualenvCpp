@@ -8,6 +8,7 @@
 #include "app.h"
 #include "app_schema.h"
 #include "environ.h"
+#include "file_loading.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -50,25 +51,41 @@ void ScrollingBuffer::WriteBytes(const char *rd_buf, const int size) {
     }
 }
 
-AppProcess::AppProcess(AppConfig &app_cfg, EnvConfig &env_cfg, environment_t &orig)
+AppProcess::AppProcess(AppConfig &app_cfg, environment_t &orig)
 : m_buffer(10000)
 {
-    // initialise descriptors for process
-    m_label = app_cfg.name;
-
-    // setup environment parameters
-    fs::path root = fs::path(app_cfg.env_parent_dir) / app_cfg.env_name;
-    fs::path exec_path = fs::path(app_cfg.exec_path);
-    std::string cwd_path_str = fs::path(exec_path).remove_filename().string();
-
+    // create params to generate our environment data structure
     EnvParams params;
-    params.root = root.string();
-    params.username = app_cfg.username;
+    std::string cwd_path_str; // TODO: we let the user define this manually?
 
-    // TODO: load the environment config from the app_cfg.env_config_path
+    {
+        // setup environment parameters
+        fs::path root = fs::path(app_cfg.env_parent_dir) / app_cfg.env_name;
+        fs::path exec_path = fs::path(app_cfg.exec_path);
+        cwd_path_str = std::move(fs::path(exec_path).remove_filename().string());
+
+        params.root = root.string();
+        params.username = app_cfg.username;
+    }
+
+    // load the environment config
+    const auto env_filepath = app_cfg.env_config_path;
+    auto env_doc_res = load_document_from_filename(env_filepath.c_str());
+    if (!env_doc_res) {
+        throw std::runtime_error(fmt::format("Failed to retrieve default environment file ({})", env_filepath));
+    }
+
+    auto env_doc = std::move(env_doc_res.value());
+    if (!validate_document(env_doc, ENV_SCHEMA)) {
+        throw std::runtime_error(std::string("Failed to validate default environment schema"));
+    }
+
+    auto env_cfg = load_env_config(env_doc);
     environment_t env = create_env_from_cfg(orig, env_cfg, params);
     auto env_str = create_env_string(env);
 
+    // initialise descriptors for process
+    m_label = app_cfg.name;
 
     // Set the bInheritHandle flag so pipe handles are inherited. 
     SECURITY_ATTRIBUTES security_attr; 
