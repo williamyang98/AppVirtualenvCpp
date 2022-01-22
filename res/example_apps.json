@@ -1,0 +1,13 @@
+{
+ "apps": [
+  {
+   "name": "example name",
+   "username": "example username",
+   "exec_path": "example exec path",
+   "args": "example args",
+   "env_name": "example env name",
+   "env_config_path": "example env config path",
+   "env_parent_dir": "example parent dir"
+  }
+ ]
+}

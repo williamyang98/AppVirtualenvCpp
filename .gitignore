@@ -1,0 +1,7 @@
+imgui.ini
+logs.txt
+build/
+test/
+
+res/apps.json
+res/apps.json.bak

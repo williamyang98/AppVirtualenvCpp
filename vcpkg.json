@@ -1,0 +1,19 @@
+{
+  "name": "TorrentRenamerCpp",
+  "version-string": "0.0.1",
+  "dependencies": [
+    {
+      "name": "rapidjson",
+      "version>=": "2020-09-14#2"
+    },
+    {
+      "name": "fmt",
+      "version>=": "8.1.0"
+    },
+    {
+      "name": "spdlog",
+      "version>=": "1.9.2"
+    },
+    "imgui[core, glfw-binding, opengl3-binding]"
+  ]
+}

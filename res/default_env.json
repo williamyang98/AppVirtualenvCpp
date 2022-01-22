@@ -1,0 +1,53 @@
+{
+    "directories" : {
+        "ALLUSERSPROFILE": "{root}/ProgramData/",
+        "APPDATA": "{root}/Users/{username}/AppData/Roaming/",
+        "COMMONPROGRAMFILES": "{root}/Program Files/Common Files/",
+        "COMMONPROGRAMFILES(X86)": "{root}/Program Files (x86)/Common Files/",
+        "COMMONPROGRAMW6432": "{root}/Program Files/Common Files/",
+        "HOMEDRIVE": "{root}/",
+        "HOMEPATH": "{root}/Users/{username}",
+        "HOME": "{root}/Users/Home",
+        "LOCALAPPDATA": "{root}/Users/{username}/AppData/Local",
+        "PROGRAMDATA": "{root}/ProgramData/", 
+        "PROGRAMFILES": "{root}/Program Files/",
+        "PROGRAMW6432": "{root}/Program Files/",
+        "PROGRAMFILES(X86)": "{root}/Program Files (x86)/",
+        "SYSTEMDRIVE": "{root}/",
+        "SYSTEMROOT": "C:/Windows/",
+        "TEMP": "{root}/Users/{username}/AppData/Local/Temp/",
+        "TMP": "{root}/Users/{username}/AppData/Local/Temp/",
+        "USERPROFILE": "{root}/Users/{username}",
+        "WINDIR": "C:/Windows/",
+        "PUBLIC": "{root}/Users/Public",
+        "ONEDRIVE": "{root}/Users/{username}/OneDrive"
+    },
+    "seed_directories": [
+        "{root}/Users/{username}/Documents/My Games/",
+        "{root}/Users/{username}/Desktop/",
+        "{root}/Users/{username}/Downloads/",
+        "{root}/Users/{username}/Pictures/"
+    ],
+    "override_variables" : { 
+        "USERNAME": "{username}"
+    },
+    "pass_through_variables" : [
+        "COMPUTERNAME",
+        "COMSPEC", 
+        "PATH", 
+        "PATHEXT", 
+        "USERDOMAIN", 
+        "USERDOMAIN_ROAMINGPROFILE", 
+
+        "PSMODULEPATH",
+        "DRIVERDATA",
+
+        "COMPUTERNAME",
+        "PROCESSOR_ARCHITECTURE",
+        "PROCESSOR_IDENTIFIER",
+        "PROCESSOR_LEVEL",
+        "PROCESSOR_REVISION",
+        "NUMBER_OF_PROCESSORS",
+        "OS"
+    ]
+}

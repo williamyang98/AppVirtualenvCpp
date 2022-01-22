@@ -1,0 +1,9 @@
+{
+    "name": "",
+    "username": "FiendChain",
+    "exec_path": "",
+    "args": "",
+    "env_name": "Generic",
+    "env_config_path": "./res/default_env.json",
+    "env_parent_dir": "./test/envs"
+}

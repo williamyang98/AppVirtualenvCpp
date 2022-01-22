@@ -1,0 +1,11 @@
+{
+    "cmake.configureSettings": {
+        "CMAKE_TOOLCHAIN_FILE": "C:/tools/vcpkg/scripts/buildsystems/vcpkg.cmake"
+    },
+    "files.associations": {
+        "*.html": "django-html",
+        "unordered_map": "cpp",
+        "chrono": "cpp",
+        "functional": "cpp"
+    }
+}
