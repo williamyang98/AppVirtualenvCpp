@@ -66,7 +66,7 @@ static void RenderAppsTab(App &main_app);
 static void RenderProcessesTab(App &main_app);
 
 static void RenderManagedConfigList(App &main_app);
-static std::optional<config_list_t::iterator> RenderManagedConfig(App &main_app, ManagedConfig &managed_cfg, config_list_t::iterator &it);
+static void RenderManagedConfig(App &main_app, ManagedConfig &managed_cfg);
 static void RenderAppConfigCreatorPopup(App &main_app, const char *label);
 static void RenderManagedConfigPopup(App &main_app, ManagedConfig &managed_cfg);
 static void RenderAppConfigEditForm(ManagedConfig &managed_cfg);
@@ -78,11 +78,7 @@ void RenderApp(App &main_app, const char *label) {
     ImGuiWindowFlags win_flags = ImGuiWindowFlags_MenuBar;
     ImGui::Begin("Applications", NULL, win_flags);
 
-    bool is_any_dirty = false;
-    for (auto &cfg: main_app.GetConfigs()) {
-        is_any_dirty = is_any_dirty || cfg->IsDirty();
-    }
-    is_any_dirty = is_any_dirty || main_app.GetIsConfligListDirtied();
+    auto &managed_configs = main_app.m_managed_configs;
 
     // menu bar
     const char *app_create_cfg_label = "Add app###application editor adder";
@@ -102,25 +98,19 @@ void RenderApp(App &main_app, const char *label) {
                 if (opt) {
                     // if failed to load app config, we reset it all
                     if (!main_app.open_app_config(opt.value())) {
-                        main_app.GetConfigs().clear();
+                        managed_configs.Clear();
                     }
                 }
             }
 
-            if (is_any_dirty) {
+            if (managed_configs.IsDirty()) {
                 ImGui::Separator();
                 if (ImGui::MenuItem("Save all changes")) {
-                    for (auto &cfg: main_app.GetConfigs()) {
-                        cfg->ApplyChanges();
-                    }
-                    main_app.ApplyConfigListChanges();
+                    managed_configs.ApplyChanges();
                     main_app.save_configs();
                 }
                 if (ImGui::MenuItem("Revert all changes")) {
-                    main_app.RevertConfigListChanges();
-                    for (auto &cfg: main_app.GetConfigs()) {
-                        cfg->RevertChanges();
-                    }
+                    managed_configs.RevertChanges();
                 }
             }
 
@@ -135,7 +125,7 @@ void RenderApp(App &main_app, const char *label) {
     }
 
     if (ImGui::BeginTabBar("##main_tab_bar")) {
-        const char *apps_tab_suffix = is_any_dirty ? " *" : "";
+        const char *apps_tab_suffix = managed_configs.IsDirty() ? " *" : "";
         auto apps_label = fmt::format("Applications{}###apps_tab", apps_tab_suffix); 
         if (ImGui::BeginTabItem(apps_label.c_str())) {
             RenderAppsTab(main_app);
@@ -278,25 +268,26 @@ void RenderManagedConfigList(App &main_app) {
         ImGui::TableHeadersRow();
 
         int row_id = 0;
-        auto &cfgs = main_app.GetConfigs();
-        auto it = cfgs.begin();
-        auto end = cfgs.end();
+        auto &managed_configs = main_app.m_managed_configs;
+        auto &cfgs = managed_configs.GetConfigs();
 
-        while (it != end) {
-            auto &managed_cfg = *it;
+        for (auto managed_cfg: managed_configs.GetConfigs()) {
             auto &cfg = managed_cfg->GetConfig();
             auto name = cfg.name.c_str();
             if (!filter.PassFilter(name)) {
                 continue;
             }
 
-            ImGui::PushID(row_id++);
-            auto opt = RenderManagedConfig(main_app, *managed_cfg, it);
-            if (!opt) {
-                ++it;
-            } else {
-                it = opt.value();
+            // hide these zombie untracked configs which were deleted
+            auto status = managed_cfg->GetStatus();
+            if ((status == ManagedConfig::Status::UNTRACKED) &&
+                (managed_cfg->IsPendingDelete())) 
+            {
+                continue;
             }
+
+            ImGui::PushID(row_id++);
+            RenderManagedConfig(main_app, *managed_cfg);
             ImGui::PopID();
         }
 
@@ -304,18 +295,31 @@ void RenderManagedConfigList(App &main_app) {
     }
 }
 
-std::optional<config_list_t::iterator> RenderManagedConfig(App &main_app, ManagedConfig &managed_cfg, config_list_t::iterator &it) {
-    config_list_t::iterator new_it;
-    bool is_deleted = false;
-
+void RenderManagedConfig(App &main_app, ManagedConfig &managed_cfg) {
     auto &cfg = managed_cfg.GetConfig();
 
     ImGui::TableNextRow();
 
-    // gold colour for dirtied configs
-    static const ImU32 cell_bg_color = ImGui::GetColorU32(ImVec4(1.0f, 0.84f, 0.0f, 0.4f));
-    if (managed_cfg.IsDirty()) {
-        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, cell_bg_color);
+    if (managed_cfg.IsPendingDelete()) {
+        ImGui::TableSetBgColor(
+            ImGuiTableBgTarget_RowBg0, 
+            ImGui::GetColorU32(ImVec4(1.0f, 0.0f, 0.0f, 0.4f)));
+    } else {
+        auto status = managed_cfg.GetStatus();
+        switch (status) {
+        case ManagedConfig::Status::CHANGED:
+            ImGui::TableSetBgColor(
+                ImGuiTableBgTarget_RowBg0, 
+                ImGui::GetColorU32(ImVec4(1.0f, 0.84f, 0.0f, 0.4f)));
+            break;
+        case ManagedConfig::Status::UNTRACKED:
+            ImGui::TableSetBgColor(
+                ImGuiTableBgTarget_RowBg0, 
+                ImGui::GetColorU32(ImVec4(0.0f, 1.0f, 0.0f, 0.4f)));
+            break;
+        default:
+            break;
+        }
     }
 
     ImGui::TableSetColumnIndex(0);
@@ -325,6 +329,15 @@ std::optional<config_list_t::iterator> RenderManagedConfig(App &main_app, Manage
     ImGui::TableSetColumnIndex(2);
     ImGui::TextWrapped(cfg.env_name.c_str());
     ImGui::TableSetColumnIndex(3);
+
+    // if the entry has been deleted, we render a restore button instead
+    if (managed_cfg.IsPendingDelete()) {
+        if (ImGui::Button("Restore")) {
+            managed_cfg.SetIsPendingDelete(false);
+        }
+        return;
+    }
+
     if (ImGui::Button("Launch")) {
         main_app.launch_app(cfg);
     }
@@ -337,20 +350,13 @@ std::optional<config_list_t::iterator> RenderManagedConfig(App &main_app, Manage
 
     ImGui::SameLine();
     if (ImGui::Button("Delete")) {
-        new_it = main_app.RemoveConfigFromList(it);
-        is_deleted = true;
+        managed_cfg.SetIsPendingDelete(true);
     }
 
     bool is_open = true;
     if (ImGui::BeginPopupModal(popup_name, &is_open)) {
         RenderManagedConfigPopup(main_app, managed_cfg);
         ImGui::EndPopup();
-    }
-
-    if (!is_deleted) {
-        return {};
-    } else {
-        return new_it;
     }
 }
 
@@ -368,7 +374,7 @@ void RenderAppConfigEditForm(ManagedConfig &managed_cfg) {
         }
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
         if (ImGui::InputText("##edit_text", &s_in)) {
-            managed_cfg.SetDirtyFlag();
+            managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
         }
         ImGui::PopStyleVar();
         if (expand_flag) {
@@ -402,7 +408,7 @@ void RenderAppConfigEditForm(ManagedConfig &managed_cfg) {
         ImGui::PushItemWidth(-1.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
         if (ImGui::InputText("##edit_name", &cfg.name)) {
-            managed_cfg.SetDirtyFlag();
+            managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
         }
         ImGui::PopStyleVar();
         ImGui::PopItemWidth();
@@ -415,7 +421,7 @@ void RenderAppConfigEditForm(ManagedConfig &managed_cfg) {
         ImGui::PushItemWidth(-1.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
         if (ImGui::InputText("##edit_username", &cfg.username)) {
-            managed_cfg.SetDirtyFlag();
+            managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
         }
         ImGui::PopStyleVar();
         ImGui::PopItemWidth();
@@ -431,13 +437,13 @@ void RenderAppConfigEditForm(ManagedConfig &managed_cfg) {
             auto opt = dialog.open();
             if (opt) {
                 cfg.env_parent_dir = std::move(opt.value());
-                managed_cfg.SetDirtyFlag();
+                managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
             }
         }
         ImGui::SameLine();
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
         if (ImGui::InputText("##edit_env", &cfg.env_name)) {
-            managed_cfg.SetDirtyFlag();
+            managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
         }
         ImGui::PopStyleVar();
 
@@ -457,7 +463,7 @@ void RenderAppConfigEditForm(ManagedConfig &managed_cfg) {
             auto opt = dialog.open();
             if (opt) {
                 cfg.exec_path = std::move(opt.value());
-                managed_cfg.SetDirtyFlag();
+                managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
             }
         }
 
@@ -469,7 +475,7 @@ void RenderAppConfigEditForm(ManagedConfig &managed_cfg) {
         ImGui::PushItemWidth(-1.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
         if (ImGui::InputText("##edit_args", &cfg.args)) {
-            managed_cfg.SetDirtyFlag();
+            managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
         }
         ImGui::PopStyleVar();
         ImGui::PopItemWidth();
@@ -490,7 +496,7 @@ void RenderAppConfigEditForm(ManagedConfig &managed_cfg) {
             auto opt = dialog.open();
             if (opt) {
                 cfg.env_config_path = std::move(opt.value());
-                managed_cfg.SetDirtyFlag();
+                managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
             }
         }
 
@@ -499,13 +505,12 @@ void RenderAppConfigEditForm(ManagedConfig &managed_cfg) {
 }
 
 void RenderManagedConfigPopup(App &main_app, ManagedConfig &managed_cfg) {
-    auto &cfg = managed_cfg.GetConfig();
-
     RenderAppConfigEditForm(managed_cfg);
 
-    ImGui::Separator();
+    auto status = managed_cfg.GetStatus();
 
-    if (managed_cfg.IsDirty()) {
+    if ((status & ManagedConfig::Status::CHANGED)) {
+        ImGui::Separator();
         if (ImGui::Button("Save Changes##save_change_button")) {
             managed_cfg.ApplyChanges();
             main_app.save_configs();
@@ -518,14 +523,14 @@ void RenderManagedConfigPopup(App &main_app, ManagedConfig &managed_cfg) {
 }
 
 void RenderAppConfigCreatorPopup(App &main_app, const char *label) {
-    auto &managed_cfg = main_app.GetCreatorConfig();
+    auto &creator_cfg = main_app.GetCreatorConfig();
 
     bool is_open = true;
     if (ImGui::BeginPopupModal(label, &is_open)) {
-        RenderAppConfigEditForm(managed_cfg);
+        RenderAppConfigEditForm(creator_cfg);
         ImGui::Separator();
         if (ImGui::Button("Create and add")) {
-            main_app.AddConfigToList(managed_cfg.GetConfig());
+            main_app.m_managed_configs.Add(creator_cfg.GetConfig());
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();

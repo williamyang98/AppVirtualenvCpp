@@ -1,12 +1,10 @@
 #include <string>
-#include <sstream>
 #include <filesystem>
 
 #include <spdlog/spdlog.h>
 #include <fmt/core.h>
 
-#include "app.h"
-#include "app_schema.h"
+#include "app_process.h"
 #include "environ.h"
 #include "file_loading.h"
 #include "utils.h"
@@ -27,8 +25,7 @@ void warn_and_throw(T x) {
     throw std::runtime_error(x);
 }
 
-ScrollingBuffer::ScrollingBuffer() 
-{
+ScrollingBuffer::ScrollingBuffer() {
     m_curr_size = 0;
     m_curr_write_index = 0;
     m_curr_read_index = 0;
@@ -49,24 +46,83 @@ ScrollingBuffer::~ScrollingBuffer() {
 
 void ScrollingBuffer::IncrementIndex(const size_t size) {
     m_curr_write_index = (m_curr_write_index + size) % m_max_size;
-    m_curr_size += size;
+    // dont edit m_curr_size until we can guarantee a valid atomic write to it
+    // doing m_curr_size += size could place it into an invalid state (m_curr_size > m_max_size)
+    size_t new_curr_size = m_curr_size + size;
 
     // overhang detection
-    if (m_curr_size > m_max_size) {
+    if (new_curr_size > m_max_size) {
         m_curr_size = m_max_size;
         m_curr_read_index = m_curr_write_index;
+    // buffer hasn't wrapped around yet
+    } else {
+        m_curr_size = new_curr_size;
     }
 
 }
 
-AppProcess::AppProcess(AppConfig &app_cfg, environment_t &orig)
-{
+// helper function for initialising an environment for a process
+// inherits from parent environment with changes determined by
+// 1. EnvConfig: environment configuration file (reuseable - i.e. default_env.json)
+// 2. EnvParams: determinied by app config      (specialized - apps.json)
+struct EnvParams {
+    std::string root;
+    std::string username;
+};
+
+environment_t create_env_from_cfg(environment_t &orig, EnvConfig &cfg, EnvParams &params) {
+    environment_t env;
+
+    auto fill_params = [&params](std::string &v) {
+        return fmt::format(v, 
+            fmt::arg("root", params.root),
+            fmt::arg("username", params.username));
+    };
+
+    auto create_directory = [](const std::string &s_in) {
+        try {
+            fs::create_directories(fs::path(s_in));
+        } catch (std::exception &ex) {
+            spdlog::warn(fmt::format("Failed to create directory ({}): ({})", s_in, ex.what()));
+        }
+    };
+
+    // directories
+    for (auto &[k,v]: cfg.env_directories) {
+        auto dir = fill_params(v);
+        // pass absolute directory to environment
+        env.insert({k, fs::absolute(dir).string() });
+        create_directory(dir);
+    }
+
+    for (auto &v: cfg.seed_directories) {
+        auto dir = fill_params(v);
+        create_directory(dir);
+    }
+
+    // variables
+    for (auto &[k,v]: cfg.override_variables) {
+        env.insert({k, fill_params(v)});
+    }
+
+    for (auto &k: cfg.pass_through_variables) {
+        if (!orig.contains(k)) {
+            continue;
+        }
+        auto &v = orig.at(k);
+        env.insert({k, fill_params(v)});
+    }
+
+    return env;
+}
+
+AppProcess::AppProcess(AppConfig &app_cfg, environment_t &orig) {
     // create params to generate our environment data structure
     EnvParams params;
     std::string cwd_path_str; // TODO: we let the user define this manually?
 
     {
-        // setup environment parameters
+        // setup environment parameters from app configuration
         fs::path root = fs::path(app_cfg.env_parent_dir) / app_cfg.env_name;
         fs::path exec_path = fs::path(app_cfg.exec_path);
         cwd_path_str = std::move(fs::path(exec_path).remove_filename().string());
@@ -161,6 +217,7 @@ AppProcess::AppProcess(AppConfig &app_cfg, environment_t &orig)
     });
 }
 
+// separate thread which loops every N milliseconds and reads from the handle into the scrolling buffer
 void AppProcess::ListenerThread() {
     BOOL bSuccess = FALSE;
 
