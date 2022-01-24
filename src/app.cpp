@@ -45,6 +45,11 @@ ManagedConfig::ManagedConfig(AppConfig &cfg, ManagedConfigList *parent) {
 }
 
 void ManagedConfig::SetStatus(Status status) {
+    // if we edited an untracked config, we still treat it as untracked
+    if ((m_status == Status::UNTRACKED) && (status == Status::CHANGED)) {
+        return;
+    }
+
     m_status = status;
 }
 
@@ -206,6 +211,11 @@ bool App::open_app_config(const std::string &app_filepath) {
     // these don't have the current working directory stored, so we manually set it here
     for (auto &managed_cfg: m_managed_configs.GetConfigs()) {
         auto &cfg = managed_cfg->GetConfig();
+        // ignore executable paths that aren't defined yet
+        if (cfg.exec_path.length() == 0) {
+            continue;
+        }
+        // only set if we don't have a cwd for an existing executable
         if (cfg.exec_cwd.length() == 0) {
             cfg.exec_cwd = fs::path(cfg.exec_path).remove_filename().string();
             managed_cfg->SetStatus(ManagedConfig::Status::CHANGED);
