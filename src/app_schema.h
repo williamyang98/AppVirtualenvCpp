@@ -60,6 +60,9 @@ rapidjson::Document create_app_configs_doc(T &configs) {
 
         writer.Key("exec_path"); 
         writer.String(cfg.exec_path.c_str());
+
+        writer.Key("exec_cwd"); 
+        writer.String(cfg.exec_cwd.c_str());
         
         writer.Key("args"); 
         writer.String(cfg.args.c_str());
