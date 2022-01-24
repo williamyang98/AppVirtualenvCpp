@@ -235,7 +235,7 @@ void App::save_configs() {
             return !cfg->IsPendingDelete();
         }) |
         std::views::transform([](std::shared_ptr<ManagedConfig> &cfg) {
-            return std::reference_wrapper(cfg->GetConfig());
+            return std::reference_wrapper(cfg->GetUnchangedConfig());
         });
 
     auto doc = create_app_configs_doc(cfgs);
