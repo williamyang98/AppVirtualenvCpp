@@ -119,14 +119,9 @@ environment_t create_env_from_cfg(environment_t &orig, EnvConfig &cfg, EnvParams
 AppProcess::AppProcess(AppConfig &app_cfg, environment_t &orig) {
     // create params to generate our environment data structure
     EnvParams params;
-    std::string cwd_path_str; // TODO: we let the user define this manually?
-
     {
         // setup environment parameters from app configuration
         fs::path root = fs::path(app_cfg.env_parent_dir) / app_cfg.env_name;
-        fs::path exec_path = fs::path(app_cfg.exec_path);
-        cwd_path_str = std::move(fs::path(exec_path).remove_filename().string());
-
         params.root = root.string();
         params.username = app_cfg.username;
     }
@@ -194,7 +189,7 @@ AppProcess::AppProcess(AppConfig &app_cfg, environment_t &orig) {
         NULL, NULL,
         is_inherit_handles, dw_flags,
         env_str.data(),
-        cwd_path_str.c_str(),
+        app_cfg.exec_cwd.c_str(),
         &startup_info, &process_info);
     
     if (!rv) {

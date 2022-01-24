@@ -71,6 +71,7 @@ R"({
                     "name": { "type": "string" },
                     "username": { "type": "string" },
                     "exec_path": { "type": "string" },
+                    "exec_cwd": { "type": "string" },
                     "args": { "type": "string" },
                     "env_name": { "type": "string" },
                     "env_config_path": { "type": "string" },
@@ -99,6 +100,7 @@ R"({
         "name": { "type": "string" },
         "username": { "type": "string" },
         "exec_path": { "type": "string" },
+        "exec_cwd": { "type": "string" },
         "args": { "type": "string" },
         "env_name": { "type": "string" },
         "env_config_path": { "type": "string" },
@@ -161,12 +163,16 @@ AppConfig load_app_config(rapidjson::Document &doc) {
 std::vector<AppConfig> load_app_configs(rapidjson::Document &doc) {
     std::vector<AppConfig> cfgs;
     auto apps = doc["apps"].GetArray();
+    auto load_default = [](rapidjson::Value &app, const char *key) {
+        return app.HasMember(key) ? app[key].GetString() : "";
+    };
 
     for (auto &app: apps) {
         AppConfig cfg;
         cfg.name            = app["name"].GetString();
         cfg.username        = app["username"].GetString();
         cfg.exec_path       = app["exec_path"].GetString();
+        cfg.exec_cwd        = load_default(app, "exec_cwd");
         cfg.args            = app["args"].GetString();
         cfg.env_name        = app["env_name"].GetString();
         cfg.env_config_path = app["env_config_path"].GetString();

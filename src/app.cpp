@@ -202,6 +202,16 @@ bool App::open_app_config(const std::string &app_filepath) {
     }
     m_managed_configs.ApplyChanges();
 
+    // NOTE: we want backwards compatability with older configs
+    // these don't have the current working directory stored, so we manually set it here
+    for (auto &managed_cfg: m_managed_configs.GetConfigs()) {
+        auto &cfg = managed_cfg->GetConfig();
+        if (cfg.exec_cwd.length() == 0) {
+            cfg.exec_cwd = fs::path(cfg.exec_path).remove_filename().string();
+            managed_cfg->SetStatus(ManagedConfig::Status::CHANGED);
+        }
+    }
+
     return true;
 }
 

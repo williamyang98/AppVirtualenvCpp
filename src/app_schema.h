@@ -26,6 +26,7 @@ struct AppConfig {
     std::string name;
     std::string username;
     std::string exec_path;
+    std::string exec_cwd;
     std::string args;
     std::string env_name;
     std::string env_config_path;

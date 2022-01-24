@@ -1,6 +1,7 @@
 #include <optional>
 #include <string>
 #include <array>
+#include <filesystem>
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -25,6 +26,8 @@
 #pragma comment(lib, "oleaut32.lib")
 
 namespace app::gui {
+
+namespace fs = std::filesystem;
 
 // helper object for creating windows file dialogs
 class CoFileDialog 
@@ -463,6 +466,28 @@ void RenderAppConfigEditForm(ManagedConfig &managed_cfg) {
             auto opt = dialog.open();
             if (opt) {
                 cfg.exec_path = std::move(opt.value());
+                // when we select a new executable, we automatically set the current working directory
+                cfg.exec_cwd = std::move(fs::path(cfg.exec_path).remove_filename().string());
+                managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
+            }
+        }
+
+        // executable cwd
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::Text("CWD");
+        if (ImGui::IsItemHovered()) {
+            ImGui::BeginTooltip();
+            ImGui::Text("Current working directory");
+            ImGui::EndTooltip();
+        }
+        ImGui::TableSetColumnIndex(1);
+        if (render_path_edit(cfg.exec_cwd, "##edit_exec_cwd", true)) {
+            auto dialog = CoFileDialog();
+            dialog->SetOptions(FOS_PICKFOLDERS);
+            auto opt = dialog.open();
+            if (opt) {
+                cfg.exec_cwd = std::move(opt.value());
                 managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
             }
         }
