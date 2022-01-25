@@ -413,17 +413,21 @@ void RenderPathEdit(std::string &s_in, const char *id, PathEditCallbacks &&cbs, 
 // find path relative to execution path
 std::optional<std::string> FindRelativePath(const std::string &target_filepath) {
     static const auto cwd = fs::current_path();
-    fs::path relative_path = fs::path(target_filepath).lexically_relative(cwd);
+    fs::path relative_path = fs::path(target_filepath).lexically_proximate(cwd);
     std::string relative_path_str = relative_path.string();
-    if (relative_path_str.length() == 0) {
+    if (relative_path_str.compare(target_filepath) == 0) {
         return {};
     }
     return relative_path_str;
 }
 
 // get the absolute path
-std::string GetAbsolutePath(const std::string &f_in) {
-    return fs::absolute(fs::path(f_in)).string();
+std::optional<std::string> GetAbsolutePath(const std::string &f_in) {
+    std::string absolute_path_str = fs::absolute(fs::path(f_in)).string();
+    if (absolute_path_str.compare(f_in) == 0) {
+        return {};
+    }
+    return absolute_path_str;
 };
 
 void RenderAppConfigEditForm(ManagedConfig &managed_cfg) {
@@ -488,8 +492,11 @@ void RenderAppConfigEditForm(ManagedConfig &managed_cfg) {
                 }
             },
             [&managed_cfg, &cfg]() { 
-                cfg.env_parent_dir = GetAbsolutePath(cfg.env_parent_dir); 
-                managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
+                auto opt = GetAbsolutePath(cfg.env_parent_dir);
+                if (opt) {
+                    cfg.env_parent_dir = std::move(opt.value());
+                    managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
+                }
             }
         }, false);
         ImGui::SameLine();
@@ -529,9 +536,12 @@ void RenderAppConfigEditForm(ManagedConfig &managed_cfg) {
                     managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
                 }
             },
-            [&managed_cfg, &cfg]() { 
-                cfg.exec_path = GetAbsolutePath(cfg.exec_path); 
-                managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
+            [&managed_cfg, &cfg]() {  
+                auto opt = GetAbsolutePath(cfg.exec_path);
+                if (opt) {
+                    cfg.exec_path = std::move(opt.value());
+                    managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
+                }
             }
         });
 
@@ -563,9 +573,12 @@ void RenderAppConfigEditForm(ManagedConfig &managed_cfg) {
                     managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
                 }
             },
-            [&managed_cfg, &cfg]() { 
-                cfg.exec_cwd = GetAbsolutePath(cfg.exec_cwd); 
-                managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
+            [&managed_cfg, &cfg]() {
+                auto opt = GetAbsolutePath(cfg.exec_cwd);
+                if (opt) {
+                    cfg.exec_cwd = std::move(opt.value());
+                    managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
+                }
             }
         });
 
@@ -610,9 +623,12 @@ void RenderAppConfigEditForm(ManagedConfig &managed_cfg) {
                     managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
                 }
             },
-            [&managed_cfg, &cfg]() { 
-                cfg.env_config_path = GetAbsolutePath(cfg.env_config_path); 
-                managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
+            [&managed_cfg, &cfg]() {
+                auto opt = GetAbsolutePath(cfg.env_config_path);
+                if (opt) {
+                    cfg.env_config_path = std::move(opt.value());
+                    managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
+                }
             }
         });
 
