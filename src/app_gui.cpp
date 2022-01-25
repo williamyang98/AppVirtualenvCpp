@@ -1,7 +1,8 @@
-#include <optional>
 #include <string>
 #include <array>
 #include <filesystem>
+#include <optional>
+#include <functional>
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -363,36 +364,70 @@ void RenderManagedConfig(App &main_app, ManagedConfig &managed_cfg) {
     }
 }
 
+// helpers for rendering an editable path
+struct PathEditCallbacks {
+    std::function<void (void)> on_edit_callback;
+    std::function<void (void)> open_dialog;
+    std::function<void (void)> open_get_relative_path;
+    std::function<void (void)> open_get_absolute_path;
+};
+
+void RenderPathEdit(std::string &s_in, const char *id, PathEditCallbacks &&cbs, const bool expand_flag=true) {
+    ImGui::PushID(id);
+    ImGui::BeginGroup(); 
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0,0));
+
+    if (expand_flag) {
+        float button_width = ImGui::CalcTextSize(" .. ").x;
+        ImGui::PushItemWidth(-button_width);
+    }
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+    if (ImGui::InputText("##edit_text", &s_in)) {
+        cbs.on_edit_callback();
+    }
+    ImGui::PopStyleVar();
+    if (expand_flag) {
+        ImGui::PopItemWidth();
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("..")) {
+        cbs.open_dialog();
+    }
+    if (ImGui::BeginPopupContextItem("##path_context_menu")) {
+        if (ImGui::MenuItem("Get relative path")) {
+            cbs.open_get_relative_path();
+        }
+        if (ImGui::MenuItem("Get absolute path")) {
+            cbs.open_get_absolute_path();
+        }
+        ImGui::EndPopup();
+    }
+
+    ImGui::PopStyleVar();
+    ImGui::EndGroup();
+    ImGui::PopID();
+}
+
+
+// find path relative to execution path
+std::optional<std::string> FindRelativePath(const std::string &target_filepath) {
+    static const auto cwd = fs::current_path();
+    fs::path relative_path = fs::path(target_filepath).lexically_relative(cwd);
+    std::string relative_path_str = relative_path.string();
+    if (relative_path_str.length() == 0) {
+        return {};
+    }
+    return relative_path_str;
+}
+
+// get the absolute path
+std::string GetAbsolutePath(const std::string &f_in) {
+    return fs::absolute(fs::path(f_in)).string();
+};
+
 void RenderAppConfigEditForm(ManagedConfig &managed_cfg) {
     auto &cfg = managed_cfg.GetConfig();
-
-    auto render_path_edit = [&managed_cfg](std::string &s_in, const char *id, const bool expand_flag=false) {
-        ImGui::PushID(id);
-        ImGui::BeginGroup(); 
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0,0));
-
-        if (expand_flag) {
-            float button_width = ImGui::CalcTextSize(" .. ").x;
-            ImGui::PushItemWidth(-button_width);
-        }
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-        if (ImGui::InputText("##edit_text", &s_in)) {
-            managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
-        }
-        ImGui::PopStyleVar();
-        if (expand_flag) {
-            ImGui::PopItemWidth();
-        }
-
-        ImGui::SameLine();
-        bool button_state = ImGui::Button("..");
-
-        ImGui::PopStyleVar();
-        ImGui::EndGroup();
-        ImGui::PopID();
-
-        return button_state;
-    };
 
     ImGuiTableFlags flags = 
         ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable |
@@ -434,15 +469,29 @@ void RenderAppConfigEditForm(ManagedConfig &managed_cfg) {
         ImGui::TableSetColumnIndex(0);
         ImGui::Text("Environment");
         ImGui::TableSetColumnIndex(1);
-        if (render_path_edit(cfg.env_parent_dir, "##edit_env_parent_dir")) {
-            auto dialog = CoFileDialog();
-            dialog->SetOptions(FOS_PICKFOLDERS);
-            auto opt = dialog.open();
-            if (opt) {
-                cfg.env_parent_dir = std::move(opt.value());
+        RenderPathEdit(cfg.env_parent_dir, "##edit_env_parent_dir", {
+            [&managed_cfg]() { managed_cfg.SetStatus(ManagedConfig::Status::CHANGED); },
+            [&managed_cfg, &cfg]() {  
+                auto dialog = CoFileDialog();
+                dialog->SetOptions(FOS_PICKFOLDERS);
+                auto opt = dialog.open();
+                if (opt) {
+                    cfg.env_parent_dir = std::move(opt.value());
+                    managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
+                }
+            },
+            [&managed_cfg, &cfg]() {  
+                auto opt = FindRelativePath(cfg.env_parent_dir);
+                if (opt) {
+                    cfg.env_parent_dir = std::move(opt.value());
+                    managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
+                }
+            },
+            [&managed_cfg, &cfg]() { 
+                cfg.env_parent_dir = GetAbsolutePath(cfg.env_parent_dir); 
                 managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
             }
-        }
+        }, false);
         ImGui::SameLine();
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
         if (ImGui::InputText("##edit_env", &cfg.env_name)) {
@@ -455,22 +504,36 @@ void RenderAppConfigEditForm(ManagedConfig &managed_cfg) {
         ImGui::TableSetColumnIndex(0);
         ImGui::Text("Executable");
         ImGui::TableSetColumnIndex(1);
-        if (render_path_edit(cfg.exec_path, "##edit_exec_path", true)) {
-            auto dialog = CoFileDialog();
-            auto file_types = std::array<_COMDLG_FILTERSPEC, 2> {{
-                { L"All Files", L"*" },
-                { L"Applications", L"*.exe" }
-            }};
-            dialog->SetFileTypes(file_types.size(), file_types.data());
-            dialog->SetFileTypeIndex(2);
-            auto opt = dialog.open();
-            if (opt) {
-                cfg.exec_path = std::move(opt.value());
-                // when we select a new executable, we automatically set the current working directory
-                cfg.exec_cwd = std::move(fs::path(cfg.exec_path).remove_filename().string());
+        RenderPathEdit(cfg.exec_path, "##edit_exec_path", {
+            [&managed_cfg]() { managed_cfg.SetStatus(ManagedConfig::Status::CHANGED); },
+            [&managed_cfg, &cfg]() {  
+                auto dialog = CoFileDialog();
+                auto file_types = std::array<_COMDLG_FILTERSPEC, 2> {{
+                    { L"All Files", L"*" },
+                    { L"Applications", L"*.exe" }
+                }};
+                dialog->SetFileTypes(file_types.size(), file_types.data());
+                dialog->SetFileTypeIndex(2);
+                auto opt = dialog.open();
+                if (opt) {
+                    cfg.exec_path = std::move(opt.value());
+                    // when we select a new executable, we automatically set the current working directory
+                    cfg.exec_cwd = std::move(fs::path(cfg.exec_path).remove_filename().string());
+                    managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
+                }
+            },
+            [&managed_cfg, &cfg]() {  
+                auto opt = FindRelativePath(cfg.exec_path);
+                if (opt) {
+                    cfg.exec_path = std::move(opt.value());
+                    managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
+                }
+            },
+            [&managed_cfg, &cfg]() { 
+                cfg.exec_path = GetAbsolutePath(cfg.exec_path); 
                 managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
             }
-        }
+        });
 
         // executable cwd
         ImGui::TableNextRow();
@@ -482,15 +545,29 @@ void RenderAppConfigEditForm(ManagedConfig &managed_cfg) {
             ImGui::EndTooltip();
         }
         ImGui::TableSetColumnIndex(1);
-        if (render_path_edit(cfg.exec_cwd, "##edit_exec_cwd", true)) {
-            auto dialog = CoFileDialog();
-            dialog->SetOptions(FOS_PICKFOLDERS);
-            auto opt = dialog.open();
-            if (opt) {
-                cfg.exec_cwd = std::move(opt.value());
+        RenderPathEdit(cfg.exec_cwd, "##edit_exec_cwd", {
+            [&managed_cfg]() { managed_cfg.SetStatus(ManagedConfig::Status::CHANGED); },
+            [&managed_cfg, &cfg]() {
+                auto dialog = CoFileDialog();
+                dialog->SetOptions(FOS_PICKFOLDERS);
+                auto opt = dialog.open();
+                if (opt) {
+                    cfg.exec_cwd = std::move(opt.value());
+                    managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
+                }
+            },
+            [&managed_cfg, &cfg]() {
+                auto opt = FindRelativePath(cfg.exec_cwd);
+                if (opt) {
+                    cfg.exec_cwd = std::move(opt.value());
+                    managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
+                }
+            },
+            [&managed_cfg, &cfg]() { 
+                cfg.exec_cwd = GetAbsolutePath(cfg.exec_cwd); 
                 managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
             }
-        }
+        });
 
         // args
         ImGui::TableNextRow();
@@ -510,20 +587,34 @@ void RenderAppConfigEditForm(ManagedConfig &managed_cfg) {
         ImGui::TableSetColumnIndex(0);
         ImGui::Text("Config file");
         ImGui::TableSetColumnIndex(1);
-        if (render_path_edit(cfg.env_config_path, "##edit_env_config_path", true)) {
-            auto dialog = CoFileDialog();
-            auto file_types = std::array<_COMDLG_FILTERSPEC, 2> {{
-                { L"All Files", L"*" },
-                { L"JSON", L"*.json" }
-            }};
-            dialog->SetFileTypes(file_types.size(), file_types.data());
-            dialog->SetFileTypeIndex(2);
-            auto opt = dialog.open();
-            if (opt) {
-                cfg.env_config_path = std::move(opt.value());
+        RenderPathEdit(cfg.env_config_path, "##edit_env_config_path", {
+            [&managed_cfg]() { managed_cfg.SetStatus(ManagedConfig::Status::CHANGED); },
+            [&managed_cfg, &cfg]() {
+                auto dialog = CoFileDialog();
+                auto file_types = std::array<_COMDLG_FILTERSPEC, 2> {{
+                    { L"All Files", L"*" },
+                    { L"JSON", L"*.json" }
+                }};
+                dialog->SetFileTypes(file_types.size(), file_types.data());
+                dialog->SetFileTypeIndex(2);
+                auto opt = dialog.open();
+                if (opt) {
+                    cfg.env_config_path = std::move(opt.value());
+                    managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
+                }
+            },
+            [&managed_cfg, &cfg]() {
+                auto opt = FindRelativePath(cfg.env_config_path);
+                if (opt) {
+                    cfg.env_config_path = std::move(opt.value());
+                    managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
+                }
+            },
+            [&managed_cfg, &cfg]() { 
+                cfg.env_config_path = GetAbsolutePath(cfg.env_config_path); 
                 managed_cfg.SetStatus(ManagedConfig::Status::CHANGED);
             }
-        }
+        });
 
         ImGui::EndTable();
     }
