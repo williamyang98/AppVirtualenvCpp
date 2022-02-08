@@ -5,8 +5,6 @@
 #include <functional>
 
 #include <imgui.h>
-#include <imgui_impl_glfw.h>
-#include <imgui_impl_opengl3.h>
 #include <imgui_stdlib.h>
 
 #include <fmt/format.h>
@@ -19,7 +17,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <processenv.h>
-#include <ShObjIdl.h>
+#include <shobjidl.h>
 #include <shtypes.h>
 
 #pragma comment(lib, "user32.lib")
