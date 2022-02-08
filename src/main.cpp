@@ -29,9 +29,11 @@
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "oleaut32.lib")
 
-#ifdef NDEBUG
-#pragma comment(linker, "/SUBSYSTEM:windows /ENTRY:mainCRTStartup")
-#endif
+// Disable this so that our child processes have a buffer to print to?
+// TODO: Might need to change how the child process inherits the parent process's handles or properties
+// #ifdef NDEBUG
+// #pragma comment(linker, "/SUBSYSTEM:windows /ENTRY:mainCRTStartup")
+// #endif
 
 // Data
 static ID3D11Device*            g_pd3dDevice = NULL;
