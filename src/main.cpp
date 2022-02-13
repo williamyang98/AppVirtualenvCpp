@@ -187,8 +187,17 @@ int run(const char *root_path) {
             ImGui::UpdatePlatformWindows();
             ImGui::RenderPlatformWindowsDefault();
         }
+        
+        // fixed vsync being disabled when minimised
+        static UINT presentFlags = 0;
+        if (g_pSwapChain->Present(1, presentFlags) == DXGI_STATUS_OCCLUDED) {
+            presentFlags = DXGI_PRESENT_TEST;
+            Sleep(20);
+        } else {
+            presentFlags = 0;
+        }
 
-        g_pSwapChain->Present(1, 0); // Present with vsync
+        //g_pSwapChain->Present(1, 0); // Present with vsync
         //g_pSwapChain->Present(0, 0); // Present without vsync
     }
 
