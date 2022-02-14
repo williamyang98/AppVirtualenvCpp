@@ -5,6 +5,7 @@
 #include "imgui.h"
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx11.h"
+#include "imgui_config.h"
 
 #include <stdio.h>
 #include <iostream>
@@ -119,12 +120,15 @@ int run(const char *root_path) {
     io.ConfigFlags |= ImGuiConfigFlags_DpiEnableScaleViewports; // FIXME-DPI: Experimental.
 
     // load font
-    io.Fonts->AddFontDefault();
-    static const ImWchar icons_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
-    ImFontConfig icons_config; 
-    icons_config.MergeMode = true; 
-    icons_config.PixelSnapH = true;
-    io.Fonts->AddFontFromFileTTF("res/font_awesome.ttf", 16.0f, &icons_config, icons_ranges);
+    //io.Fonts->AddFontDefault();
+    io.Fonts->AddFontFromFileTTF("res/Roboto-Regular.ttf", 15.0f);
+    {
+        static const ImWchar icons_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
+        ImFontConfig icons_config; 
+        icons_config.MergeMode = true; 
+        icons_config.PixelSnapH = true;
+        io.Fonts->AddFontFromFileTTF("res/font_awesome.ttf", 16.0f, &icons_config, icons_ranges);
+    }
 
     // Setup Dear ImGui style
     // ImGui::StyleColorsDark();
@@ -138,6 +142,7 @@ int run(const char *root_path) {
         style.WindowRounding = 0.0f;
         style.Colors[ImGuiCol_WindowBg].w = 1.0f;
     }
+    ImGuiSetupCustomConfig();
 
     // Setup Platform/Renderer backends
     ImGui_ImplWin32_Init(hwnd);
@@ -170,7 +175,7 @@ int run(const char *root_path) {
         ImGui::NewFrame();
 
         // create our dock space
-        ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
+        //ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
 
         // render our app
         app::gui::RenderApp(main_app, "Applications");

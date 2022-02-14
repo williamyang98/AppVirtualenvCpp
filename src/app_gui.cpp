@@ -76,9 +76,17 @@ static void RenderWarnings(App &main_app);
 static void RenderCriticalErrors(App &main_app);
 
 void RenderApp(App &main_app, const char *label) {
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->Pos);
+    ImGui::SetNextWindowSize(viewport->Size);
+    ImGui::SetNextWindowViewport(viewport->ID);
+
     ImGui::PushID(label);
-    ImGuiWindowFlags win_flags = ImGuiWindowFlags_MenuBar;
-    ImGui::Begin("Applications", NULL, win_flags);
+    ImGuiWindowFlags win_flags = 
+        ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar | 
+        ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse;
+    ImGui::Begin("##Applications", NULL, win_flags);
 
     auto &managed_configs = main_app.m_managed_configs;
 
