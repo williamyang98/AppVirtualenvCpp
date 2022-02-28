@@ -200,11 +200,23 @@ void RenderProcessesTab(App &main_app) {
             ImGui::PushID(pid);
             ImGui::PushItemWidth(-1.0f);
 
-            if (proc->GetIsRunning()) {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImColor(0,255,0).Value);
-            } else {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImColor(255,0,0).Value);
+            const auto proc_state = proc->GetState();
+
+            switch (proc_state) {
+                case AppProcess::State::RUNNING:
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImColor(0,255,0).Value);
+                    break;
+                case AppProcess::State::TERMINATING:
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImColor(255,215,0).Value);
+                    break;
+                case AppProcess::State::TERMINATED:
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImColor(255,0,0).Value);
+                    break;
+                default:
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImColor(60,60,255).Value);
+                    break;
             }
+
             ImGui::Text(ICON_FA_CIRCLE);
             ImGui::PopStyleColor();
             ImGui::SameLine();
@@ -214,7 +226,7 @@ void RenderProcessesTab(App &main_app) {
             }
 
             // options while process is running
-            if (proc->GetIsRunning()) {
+            if (proc_state == AppProcess::State::RUNNING) {
                 if (ImGui::BeginPopupContextItem()) {
                     if (ImGui::MenuItem("Terminate")) {
                         proc->Terminate();
