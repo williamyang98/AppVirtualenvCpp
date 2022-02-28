@@ -1,3 +1,3 @@
-[submodule "vendor/imgui_docking"]
-	path = vendor/imgui_docking
-	url = https://github.com/FiendChain/imgui_docking_cmake.git
+[submodule "vendor/imgui"]
+	path = vendor/imgui
+	url = https://github.com/ocornut/imgui.git
