@@ -38,8 +38,8 @@ struct EnvParams {
 environment_t create_env_from_cfg(environment_t &orig, EnvConfig &cfg, EnvParams &params) {
     environment_t env;
 
-    auto fill_params = [&params](std::string &v) {
-        return fmt::format(v, 
+    auto fill_params = [&params](const std::string &v) {
+        return fmt::format(fmt::runtime(v), 
             fmt::arg("root", params.root),
             fmt::arg("username", params.username));
     };

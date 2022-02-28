@@ -13,6 +13,7 @@ set(SRC_FILES
     src/app_gui.cpp
     src/app_schema.cpp
     src/app_process.cpp
+    src/managed_config.cpp
     src/scrolling_buffer.cpp
     src/environ.cpp
     src/file_loading.cpp
