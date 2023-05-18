@@ -5,3 +5,5 @@ test/
 
 res/apps.json
 res/apps.json.bak
+
+.vscode/
