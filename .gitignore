@@ -7,3 +7,5 @@ res/apps.json
 res/apps.json.bak
 
 .vscode/
+app_virtualenv_cpp_release_x64/
+app_virtualenv_cpp_release_x64.zip
