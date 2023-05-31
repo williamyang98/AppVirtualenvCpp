@@ -40,4 +40,13 @@ We can modify the values in there so they are based on environment variables ins
 
 In this screenshot we can replace <code>C:\Users\acidi</code> with <code>%USERPROFILE%</code> in the problematic folder paths. You can validate if the changes worked by running <code>print_environment.exe</code> inside the virtual environment.
 
-**However this fix may not even work** since some of the folders from <code>SHGetKnownFolderPath</code> don't seem to be modifiable within the registry (*not that I have found*). Therefore fix 1 using symbolic links is still useful if this doesn't work.
+If a folder is missing from the registry, you can manually add an entry. Refer to this [link](https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid) for the list of possible registry entries that can be added. (*some of these don't work*)
+
+For example, the <code>Saved Games</code> folder can be specified with the following registry key for <code>FOLDERID_SavedGames</code>.
+| Field | Value |
+| --- | --- |
+| Name | {4C5C32FF-BB9D-43b0-B5B4-2D72E54EAAA4} |
+| Type | REG_EXPAND_SZ |
+| Data | %USERPROFILE%\Saved Games |
+
+**However this fix may not even work** since some of the folders from <code>SHGetKnownFolderPath</code> don't seem to be modifiable within the registry (*not that I have found*). Therefore use fix 1 (symbolic links) if this doesn't work.
