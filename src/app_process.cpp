@@ -119,11 +119,11 @@ AppProcess::AppProcess(AppConfig &app_cfg, environment_t &orig) {
     // setup win32 process parameters
     PROCESS_INFORMATION process_info = {0};
 
-    STARTUPINFO startup_info = {sizeof(startup_info)};
+    STARTUPINFOA startup_info = {sizeof(STARTUPINFOA)};
     startup_info.dwFlags = STARTF_USESTDHANDLES;
 
     // TODO: free pipes if we fail somewhere along this?
-    if (!CreatePipe(&startup_info.hStdInput, &startup_info.hStdInput, &security_attr, 0)) {
+    if (!CreatePipe(&startup_info.hStdInput, &m_handle_write_std_in, &security_attr, 0)) {
         warn_and_throw("Failed to create child pipe on stdin");
     }
         
@@ -144,7 +144,7 @@ AppProcess::AppProcess(AppConfig &app_cfg, environment_t &orig) {
     }
 
 
-    bool is_inherit_handles = true;
+    BOOL is_inherit_handles = TRUE;
     DWORD dw_flags = CREATE_SUSPENDED | CREATE_NO_WINDOW;
 
     auto args_str = fmt::format("\"{}\" {}", app_cfg.exec_path, app_cfg.args);
@@ -164,11 +164,10 @@ AppProcess::AppProcess(AppConfig &app_cfg, environment_t &orig) {
     }
     
     m_state = State::RUNNING;
+    m_handle_process = process_info.hProcess;
 
     ResumeThread(process_info.hThread);
     CloseHandle(process_info.hThread);
-    m_handle_process = process_info.hProcess;
-
     CloseHandle(startup_info.hStdInput);
     CloseHandle(startup_info.hStdOutput);
     CloseHandle(startup_info.hStdError);
@@ -190,16 +189,22 @@ void AppProcess::ListenerThread() {
     };
 
     // return true if the pipe is broken
-    auto read_from_pipe = [this] (HANDLE pipe) {
+    auto read_from_pipe = [this](HANDLE pipe) -> bool {
         DWORD dwRead = 0;
-        bool is_success = ReadFile(pipe, m_buffer.GetWriteBuffer(), m_buffer.GetMaxSize(), &dwRead, NULL);
+        const BOOL is_success = ReadFile(
+            pipe, 
+            LPVOID(m_buffer.GetWriteBuffer()), 
+            DWORD(m_buffer.GetMaxSize()), 
+            &dwRead, 
+            nullptr
+        );
+
         if((!is_success) || (dwRead == 0)) {
             return true;
         }
 
         // update the circular buffer to point in the right location
-        m_buffer.IncrementIndex(dwRead);
-
+        m_buffer.IncrementIndex(size_t(dwRead));
         return false;
     };
 
@@ -220,6 +225,16 @@ void AppProcess::ListenerThread() {
         }
     } 
     m_state = State::TERMINATED;
+}
+
+size_t AppProcess::Write(const char* data, const size_t length) {
+    if (m_state != State::RUNNING) {
+        return 0;
+    }
+
+    DWORD total_written = 0;
+    WriteFile(m_handle_write_std_in, LPCVOID(data), DWORD(length), &total_written, nullptr);
+    return size_t(total_written);
 }
 
 AppProcess::~AppProcess() {

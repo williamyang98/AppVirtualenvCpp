@@ -23,6 +23,7 @@ public:
 private:
     std::atomic<State> m_state;
     std::unique_ptr<std::thread> m_thread;
+    HANDLE m_handle_write_std_in = NULL;
     HANDLE m_handle_read_std_out = NULL;
     HANDLE m_handle_read_std_err = NULL;
     HANDLE m_handle_process = NULL;
@@ -35,6 +36,7 @@ public:
     inline State GetState() const { return m_state; }
     void ListenForChanges(); // listen for changes to the process's status
     ScrollingBuffer& GetBuffer() { return m_buffer; }
+    size_t Write(const char* data, const size_t length);
     void Terminate();
 private:
     void ListenerThread();
