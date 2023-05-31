@@ -9,8 +9,9 @@
 # Additional Notes
 Unfortunately some games read the Windows registry to get their environment variables which we cannot modify. 
 
-Refer to [print_environment.c](src/print_environment.c) for a program that reads it in an interceptable way for our virtual environment program.
+Refer to [print_environment.cpp](src/print_environment.cpp) for how a program might read environment variables in different ways.
 
+## Fix 1: Symbolic link
 If you encounter a game which reads it from the Windows registry, the best alternative is to create a symbolic link to store the game files in a portable location.
 
 The following windows command will create a symbolic link into a virtual environment. 
@@ -26,3 +27,17 @@ The following windows command will create a symbolic link into a virtual environ
 - <code>%userprofile%/AppData/Roaming/[our_game_directory]</code>
 
 This is not a definitive list and you may have to do your own research. 
+
+
+## Fix 2: Registry editing
+The function <code>SHGetKnownFolderPath</code> reads from the registry path <code>HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders</code>. 
+
+We can modify the values in there so they are based on environment variables instead of being hard coded to the current user directory.
+
+**However this is not a particularly good fix**. The reason why only some of these registry entries are hard coded is probably because OneDrive sets these to point to the cloud drive. In the below screenshot OneDrive was enabled automatically by Windows. Then sync for those folders was disabled afterwards. This then resulted in some paths becoming hard coded. (*thanks Microsoft*)
+
+![Fixing registry](docs/fixing_registry_variables.png)
+
+In this screenshot we can replace <code>C:\Users\acidi</code> with <code>%USERPROFILE%</code> in the problematic folder paths. You can validate if the changes worked by running <code>print_environment.exe</code> inside the virtual environment.
+
+**However this fix may not even work** since some of the folders from <code>SHGetKnownFolderPath</code> don't seem to be modifiable within the registry (*not that I have found*). Therefore fix 1 using symbolic links is still useful if this doesn't work.
