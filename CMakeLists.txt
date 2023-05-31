@@ -28,4 +28,4 @@ target_link_libraries(main PRIVATE
     rapidjson fmt::fmt spdlog::spdlog spdlog::spdlog_header_only)
 target_compile_options(main PRIVATE "/MP")
 
-add_executable(print_environment src/print_environment.c)
+add_executable(print_environment src/print_environment.cpp)
